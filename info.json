@@ -1,0 +1,138 @@
+{
+  "welcome": "Welcome to golings — a rustlings-style tour of Go.\nRun `golings watch` and start fixing exercises in order.\nEach exercise has `// I AM NOT DONE` at the top — remove it once it compiles/passes.",
+  "exercises": [
+    {
+      "name": "intro1",
+      "path": "exercises/00_intro/intro1",
+      "file": "exercises/00_intro/intro1/intro1.go",
+      "mode": "run",
+      "hint": "The program won't compile until you fix the obvious syntax error. Look at the Println call."
+    },
+    {
+      "name": "variables1",
+      "path": "exercises/01_variables/variables1",
+      "file": "exercises/01_variables/variables1/variables1.go",
+      "mode": "compile",
+      "hint": "You need to declare x. Use `var x int = 5` or `x := 5`."
+    },
+    {
+      "name": "variables2",
+      "path": "exercises/01_variables/variables2",
+      "file": "exercises/01_variables/variables2/variables2.go",
+      "mode": "compile",
+      "hint": "The `:=` shorthand only works inside functions. At package level use `var`."
+    },
+    {
+      "name": "variables3",
+      "path": "exercises/01_variables/variables3",
+      "file": "exercises/01_variables/variables3/variables3.go",
+      "mode": "compile",
+      "hint": "Constants are declared with `const`. They cannot be reassigned."
+    },
+    {
+      "name": "functions1",
+      "path": "exercises/02_functions/functions1",
+      "file": "exercises/02_functions/functions1/functions1.go",
+      "mode": "compile",
+      "hint": "A Go function: `func name(params) returnType { ... }`. The return type goes after the parameter list."
+    },
+    {
+      "name": "functions2",
+      "path": "exercises/02_functions/functions2",
+      "file": "exercises/02_functions/functions2/functions2.go",
+      "mode": "test",
+      "hint": "Go supports multiple return values: `func divmod(a, b int) (int, int)`. Return both quotient and remainder."
+    },
+    {
+      "name": "if1",
+      "path": "exercises/03_if/if1",
+      "file": "exercises/03_if/if1/if1.go",
+      "mode": "test",
+      "hint": "No parentheses around the condition. `if x > 0 { ... } else { ... }`."
+    },
+    {
+      "name": "primitives1",
+      "path": "exercises/04_primitives/primitives1",
+      "file": "exercises/04_primitives/primitives1/primitives1.go",
+      "mode": "compile",
+      "hint": "Go does not auto-convert numeric types. Use explicit conversions like `float64(i)` or `int(f)`."
+    },
+    {
+      "name": "strings1",
+      "path": "exercises/05_strings/strings1",
+      "file": "exercises/05_strings/strings1/strings1.go",
+      "mode": "test",
+      "hint": "Use the `strings` package — `strings.ToUpper`, `strings.Contains`, etc."
+    },
+    {
+      "name": "slices1",
+      "path": "exercises/06_slices/slices1",
+      "file": "exercises/06_slices/slices1/slices1.go",
+      "mode": "test",
+      "hint": "Use `append` to grow a slice. `append(s, 4)` returns a new slice — you must reassign."
+    },
+    {
+      "name": "maps1",
+      "path": "exercises/07_maps/maps1",
+      "file": "exercises/07_maps/maps1/maps1.go",
+      "mode": "test",
+      "hint": "Create a map with `make(map[string]int)`. Reading a missing key returns the zero value; use the comma-ok form to detect absence."
+    },
+    {
+      "name": "structs1",
+      "path": "exercises/08_structs/structs1",
+      "file": "exercises/08_structs/structs1/structs1.go",
+      "mode": "test",
+      "hint": "Define a struct with `type Point struct { X, Y int }`, then construct with `Point{X: 1, Y: 2}`."
+    },
+    {
+      "name": "methods1",
+      "path": "exercises/09_methods/methods1",
+      "file": "exercises/09_methods/methods1/methods1.go",
+      "mode": "test",
+      "hint": "Pointer receiver: `func (c *Counter) Inc() { c.n++ }`. Value receivers can't mutate the original."
+    },
+    {
+      "name": "interfaces1",
+      "path": "exercises/10_interfaces/interfaces1",
+      "file": "exercises/10_interfaces/interfaces1/interfaces1.go",
+      "mode": "test",
+      "hint": "Go interfaces are implemented implicitly. Just give your type the method with the matching signature."
+    },
+    {
+      "name": "errors1",
+      "path": "exercises/11_errors/errors1",
+      "file": "exercises/11_errors/errors1/errors1.go",
+      "mode": "test",
+      "hint": "Return `error` as the last value. Use `errors.New(\"msg\")` or `fmt.Errorf(\"...: %w\", err)` to construct."
+    },
+    {
+      "name": "pointers1",
+      "path": "exercises/12_pointers/pointers1",
+      "file": "exercises/12_pointers/pointers1/pointers1.go",
+      "mode": "test",
+      "hint": "`&x` takes the address; `*p` dereferences. To mutate through a pointer parameter use `*p = newValue`."
+    },
+    {
+      "name": "goroutines1",
+      "path": "exercises/13_goroutines/goroutines1",
+      "file": "exercises/13_goroutines/goroutines1/goroutines1.go",
+      "mode": "test",
+      "hint": "Use `sync.WaitGroup`. `wg.Add(1)` before launching, `defer wg.Done()` inside, `wg.Wait()` after."
+    },
+    {
+      "name": "channels1",
+      "path": "exercises/14_channels/channels1",
+      "file": "exercises/14_channels/channels1/channels1.go",
+      "mode": "test",
+      "hint": "`ch := make(chan int)`. Send with `ch <- v`, receive with `v := <-ch`. Close with `close(ch)` when done sending."
+    },
+    {
+      "name": "generics1",
+      "path": "exercises/15_generics/generics1",
+      "file": "exercises/15_generics/generics1/generics1.go",
+      "mode": "test",
+      "hint": "Generic syntax: `func Map[T, U any](s []T, f func(T) U) []U`. Type parameters in square brackets after the name."
+    }
+  ]
+}
