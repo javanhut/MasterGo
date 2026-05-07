@@ -6,9 +6,19 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
+)
+
+const (
+	ansiReset = "\033[0m"
+	ansiBold  = "\033[1m"
+	ansiGreen = "\033[32m"
+	ansiRed   = "\033[31m"
+	ansiDim   = "\033[2m"
 )
 
 const notDoneMarker = "I AM NOT DONE"
@@ -113,12 +123,21 @@ func find(inf *info, name string) (*Exercise, error) {
 	return nil, fmt.Errorf("no exercise named %q", name)
 }
 
+// hasMarker is true iff the file contains a line that, after trimming spaces,
+// is exactly `// I AM NOT DONE`. Substring matches inside other comments
+// (e.g. an explanation that mentions the marker) do not count.
 func hasMarker(file string) (bool, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return false, err
 	}
-	return strings.Contains(string(data), notDoneMarker), nil
+	want := "// " + notDoneMarker
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == want {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // runExercise compiles/tests/runs the exercise and returns (output, success, error).
@@ -281,42 +300,127 @@ func cmdVerify(inf *info) {
 	fmt.Println("\nAll exercises pass — nice work!")
 }
 
-// cmdWatch finds the next pending exercise and re-runs it whenever any file
-// under exercises/ changes. Polling-based to avoid third-party deps.
+// cmdWatch is the interactive loop: render progress + current exercise,
+// run it, then wait for either a file change OR a single keypress
+// (h: hint, l: list, c: check all, x: reset, q: quit).
 func cmdWatch(inf *info) {
-	clearScreen()
-	if inf.Welcome != "" {
-		fmt.Println(inf.Welcome)
-		fmt.Println()
+	saved, raw := enableRawMode()
+	if raw {
+		defer restoreTerminal(saved)
+		// Restore terminal even on Ctrl-C.
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			restoreTerminal(saved)
+			fmt.Println()
+			os.Exit(0)
+		}()
 	}
-	lastSnap, _ := snapshot("exercises")
+
+	fsCh := startFsWatcher("exercises")
+	keyCh := make(chan byte, 8)
+	if raw {
+		go readKeys(keyCh)
+	}
+
+	first := true
 	for {
+		clearScreen()
+		if first && inf.Welcome != "" {
+			fmt.Println(ansiDim + inf.Welcome + ansiReset)
+			fmt.Println()
+			first = false
+		}
 		ex := nextPending(inf)
 		render(inf, ex)
 		if ex == nil {
-			fmt.Println("\n🎉 All exercises complete! Run `golings verify` to double-check.")
+			fmt.Println("\n" + ansiGreen + "All exercises complete!" + ansiReset + " Run `golings verify` to double-check.")
 			return
 		}
 		runOne(ex, false)
-		fmt.Println("\n(watching for changes — Ctrl-C to quit)")
-		// Poll for any change under exercises/
-		for {
-			time.Sleep(500 * time.Millisecond)
-			snap, err := snapshot("exercises")
-			if err != nil {
-				die(err)
+		printPrompt()
+
+		// Race: file change OR keystroke.
+		select {
+		case <-fsCh:
+			// loop -> redraw
+		case k := <-keyCh:
+			if !handleKey(k, inf, ex, keyCh) {
+				return // quit
 			}
-			if changed(lastSnap, snap) {
-				lastSnap = snap
-				break
-			}
-			lastSnap = snap
 		}
-		clearScreen()
 	}
 }
 
-// render prints a progress bar plus a header for the current exercise.
+// handleKey returns false if the loop should exit.
+func handleKey(k byte, inf *info, ex *Exercise, keyCh <-chan byte) bool {
+	switch k {
+	case 'q', 3 /* Ctrl-C */ :
+		fmt.Println()
+		return false
+	case 'h':
+		fmt.Println()
+		fmt.Println(ansiBold + "Hint:" + ansiReset + " " + ex.Hint)
+		waitAnyKey(keyCh)
+	case 'l':
+		fmt.Println()
+		cmdList(inf)
+		waitAnyKey(keyCh)
+	case 'c':
+		fmt.Println()
+		fmt.Println(ansiBold + "Checking all exercises..." + ansiReset)
+		runVerifyInline(inf)
+		waitAnyKey(keyCh)
+	case 'x':
+		fmt.Println()
+		cmdReset(inf, ex.Name)
+		waitAnyKey(keyCh)
+	}
+	return true
+}
+
+func waitAnyKey(keyCh <-chan byte) {
+	fmt.Print(ansiDim + "\n(press any key to continue)" + ansiReset)
+	<-keyCh
+}
+
+// runVerifyInline is like cmdVerify but does not call os.Exit.
+func runVerifyInline(inf *info) {
+	failed := 0
+	for i := range inf.Exercises {
+		ex := &inf.Exercises[i]
+		marker, err := hasMarker(ex.File)
+		if err != nil {
+			fmt.Printf("%s✗%s %s: %v\n", ansiRed, ansiReset, ex.Name, err)
+			failed++
+			continue
+		}
+		_, ok, err := runExercise(ex)
+		if err != nil {
+			fmt.Println(err)
+			failed++
+			continue
+		}
+		switch {
+		case !ok:
+			fmt.Printf("%s✗%s %s: %s failed\n", ansiRed, ansiReset, ex.Name, ex.Mode)
+			failed++
+		case marker:
+			fmt.Printf("%s…%s %s: marker still present\n", ansiDim, ansiReset, ex.Name)
+			failed++
+		default:
+			fmt.Printf("%s✓%s %s\n", ansiGreen, ansiReset, ex.Name)
+		}
+	}
+	if failed == 0 {
+		fmt.Println("\n" + ansiGreen + "All exercises pass!" + ansiReset)
+	} else {
+		fmt.Printf("\n%d exercise(s) not yet done.\n", failed)
+	}
+}
+
+// render prints the green progress bar plus the current-exercise header.
 func render(inf *info, current *Exercise) {
 	done, total := progress(inf)
 	const width = 40
@@ -324,15 +428,94 @@ func render(inf *info, current *Exercise) {
 	if total > 0 {
 		filled = done * width / total
 	}
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+	bar := ansiGreen + strings.Repeat("█", filled) + ansiReset + strings.Repeat("░", width-filled)
 	pct := 0
 	if total > 0 {
 		pct = done * 100 / total
 	}
-	fmt.Printf("Progress: [%s] %d/%d  %d%%\n\n", bar, done, total, pct)
+	fmt.Printf("Progress: [%s] %s%d/%d%s  %d%%\n", bar, ansiBold, done, total, ansiReset, pct)
 	if current != nil {
-		fmt.Printf("▶ %s  (%s)\n  %s\n\n", current.Name, current.Mode, current.File)
+		fmt.Printf("Current exercise: %s%s%s\n\n", ansiBold, current.File, ansiReset)
+	} else {
+		fmt.Println()
 	}
+}
+
+func printPrompt() {
+	k := func(c, label string) string {
+		return ansiBold + c + ansiReset + ":" + label
+	}
+	fmt.Printf("\n%s / %s / %s / %s / %s ? ",
+		k("h", "hint"), k("l", "list"), k("c", "check all"), k("x", "reset"), k("q", "quit"))
+}
+
+// --- terminal raw mode (via stty; no third-party deps) -------------------
+
+func sttyCmd(args ...string) *exec.Cmd {
+	c := exec.Command("stty", args...)
+	c.Stdin = os.Stdin
+	return c
+}
+
+// enableRawMode switches the terminal to cbreak (no line buffering, no echo).
+// Returns the saved state and whether raw mode was actually enabled
+// (false when stdin isn't a TTY — the loop then falls back to file-watch only).
+func enableRawMode() (string, bool) {
+	out, err := sttyCmd("-g").Output()
+	if err != nil {
+		return "", false
+	}
+	saved := strings.TrimSpace(string(out))
+	if err := sttyCmd("-icanon", "-echo", "min", "1", "time", "0").Run(); err != nil {
+		return "", false
+	}
+	return saved, true
+}
+
+func restoreTerminal(saved string) {
+	if saved == "" {
+		return
+	}
+	_ = sttyCmd(saved).Run()
+}
+
+func readKeys(out chan<- byte) {
+	buf := make([]byte, 1)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if err != nil {
+			return
+		}
+		if n > 0 {
+			out <- buf[0]
+		}
+	}
+}
+
+// --- filesystem watcher (polling) ----------------------------------------
+
+func startFsWatcher(root string) <-chan struct{} {
+	ch := make(chan struct{}, 1)
+	go func() {
+		last, _ := snapshot(root)
+		for {
+			time.Sleep(500 * time.Millisecond)
+			cur, err := snapshot(root)
+			if err != nil {
+				continue
+			}
+			if changed(last, cur) {
+				last = cur
+				select {
+				case ch <- struct{}{}:
+				default:
+				}
+			} else {
+				last = cur
+			}
+		}
+	}()
+	return ch
 }
 
 // progress counts exercises whose I-AM-NOT-DONE marker has been removed.
